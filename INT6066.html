@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Social Companion - ASD Emotion Recognition Island</title>
+    <!-- Load p5.js and ml5.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .game-container { background: white; width: 900px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); padding: 25px; text-align: center; position: relative; overflow: hidden; }
+        h1 { color: #1e3799; margin-top: 0; font-size: 26px; }
+        
+        /* Progress Indicator */
+        .progress-bar { display: flex; justify-content: space-between; margin-bottom: 15px; background: #f1f2f6; padding: 10px 20px; border-radius: 50px; }
+        .progress-step { font-weight: bold; color: #a4b0be; font-size: 14px; }
+        .progress-step.active { color: #1e3799; border-bottom: 2px solid #1e3799; }
+        .progress-step.completed { color: #78e08f; }
+
+        /* Story & Quiz Card Standard Image */
+        .story-card { background: #f8f9fa; border: 3px dashed #4a69bd; border-radius: 16px; padding: 15px; margin: 10px 0; }
+        .comic-img, .quiz-display-img { 
+            width: 100%; 
+            max-height: 380px; 
+            object-fit: contain; 
+            border-radius: 12px; 
+            image-rendering: -webkit-optimize-contrast; 
+        }
+        .story-text { font-size: 20px; color: #0c2461; font-weight: bold; margin: 12px 0 5px 0; }
+        .story-question { font-size: 16px; color: #e55039; margin-bottom: 12px; font-weight: 500; }
+
+        /* Inputs & Action Buttons */
+        .id-input {
+            width: 80%;
+            padding: 12px 20px;
+            font-size: 18px;
+            border: 2px solid #4a69bd;
+            border-radius: 50px;
+            text-align: center;
+            outline: none;
+            margin: 15px 0 20px 0;
+        }
+        .btn-main { background: #e55039; color: white; border: none; padding: 12px 28px; font-size: 17px; font-weight: bold; border-radius: 50px; cursor: pointer; box-shadow: 0 4px 15px rgba(229, 80, 57, 0.4); transition: transform 0.2s, background 0.2s, opacity 0.2s; }
+        .btn-main:hover:not(:disabled) { transform: scale(1.05); }
+        .btn-main:disabled { background: #b2bec3; cursor: not-allowed; box-shadow: none; opacity: 0.7; }
+        .btn-sub { background: #4a69bd; color: white; border: none; padding: 10px 20px; font-size: 14px; font-weight: bold; border-radius: 50px; cursor: pointer; box-shadow: 0 4px 12px rgba(74, 105, 189, 0.3); transition: transform 0.2s; }
+        .btn-skip { background: #78e08f; color: #0c2461; border: none; padding: 10px 20px; font-size: 14px; font-weight: bold; border-radius: 50px; cursor: pointer; box-shadow: 0 4px 12px rgba(120, 224, 143, 0.4); transition: transform 0.2s; }
+        .btn-sub:hover, .btn-skip:hover { transform: scale(1.05); }
+
+        /* Quiz Choice Buttons */
+        .quiz-option-btn {
+            background: #ffffff;
+            border: 2px solid #4a69bd;
+            color: #2c3e50;
+            padding: 12px 20px;
+            margin: 8px 0;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            text-align: left;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s ease;
+        }
+        .quiz-option-btn:hover { background: #eef2f7; transform: translateX(5px); }
+
+        /* Assessment Report Box */
+        .report-card {
+            background: #ffffff;
+            border: 2px solid #78e08f;
+            border-radius: 16px;
+            padding: 15px 20px;
+            margin: 15px 0;
+            text-align: left;
+            font-size: 14px;
+            color: #2c3e50;
+        }
+        .report-item { margin: 6px 0; display: flex; justify-content: space-between; border-bottom: 1px dashed #e1e8ef; padding-bottom: 4px; }
+
+        /* Canvas Stage */
+        #interactive-stage { display: none; margin-top: 10px; }
+        #canvas-container { display: flex; justify-content: center; position: relative; margin-top: 10px; }
+        
+        /* Modals & Glassmorphism */
+        .modal { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.35); backdrop-filter: blur(4px); z-index: 99; flex-direction: column; justify-content: center; align-items: center; color: white; }
+        .modal-content { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); color: #333; padding: 25px 30px; border-radius: 24px; text-align: center; width: 85%; max-height: 92%; overflow-y: auto; border: 2px solid rgba(255, 255, 255, 0.8); box-shadow: 0 20px 40px rgba(0,0,0,0.2); animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .stamp-badge { font-size: 65px; margin: 5px 0; }
+        .trophy-badge { font-size: 90px; margin: 10px 0; animation: bounce 1s infinite alternate; }
+        
+        /* Highlighted Social Tip Box */
+        .social-tip-box { background: #fff3bf; border-left: 6px solid #fcc419; padding: 14px 18px; border-radius: 12px; margin: 15px 0; text-align: left; box-shadow: 0 4px 12px rgba(252, 196, 25, 0.25); }
+        .social-tip-title { font-size: 17px; font-weight: 800; color: #e67e22; margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
+        .social-tip-body { font-size: 14px; color: #2d3436; font-weight: 600; line-height: 1.5; }
+
+        .guide-box { background: #f1f2f6; border-left: 5px solid #e55039; padding: 15px; text-align: left; border-radius: 8px; margin: 15px 0; font-size: 15px; color: #2f3542; line-height: 1.6; }
+        
+        /* Countdown Overlay & Center Hold Banner */
+        #countdown-overlay, #hold-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 10;
+            display: none;
+            text-align: center;
+        }
+
+        #countdown-overlay { font-size: 90px; font-weight: 900; color: #e55039; text-shadow: 0 4px 15px rgba(229, 80, 57, 0.6); }
+
+        #hold-overlay {
+            background: rgba(255, 71, 87, 0.85);
+            backdrop-filter: blur(6px);
+            color: white;
+            padding: 20px 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(255, 71, 87, 0.4);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            width: 80%;
+        }
+
+        .hold-title { font-size: 24px; font-weight: 800; margin-bottom: 5px; }
+        .hold-timer-text { font-size: 45px; font-weight: 900; color: #ffeb3b; text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+
+        @keyframes pop { 0% { transform: scale(0.5); } 100% { transform: scale(1); } }
+        @keyframes bounce { 0% { transform: translateY(0); } 100% { transform: translateY(-10px); } }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <h1>✨ AI Social Companion: Super NoNo Adventure ✨</h1>
+
+    <!-- Student ID Entry Modal (初始化开场登录) -->
+    <div class="modal" id="login-modal" style="display:flex;">
+        <div class="modal-content">
+            <div class="stamp-badge">🎒</div>
+            <h2 style="color: #1e3799; margin: 0;">Welcome, Explorer!</h2>
+            <p style="color: #57606f; font-size: 15px; margin-top: 5px;">Enter Student ID for Assessment Tracking</p>
+            <input type="text" id="student-id-input" class="id-input" placeholder="e.g., Student_001" value="Student_001">
+            <br>
+            <button class="btn-main" onclick="confirmStudentId()">Start Adventure 🚀</button>
+        </div>
+    </div>
+
+    <!-- Progress Indicator -->
+    <div class="progress-bar">
+        <div class="progress-step active" id="step-1">Level 1: Angry 😡</div>
+        <div class="progress-step" id="step-2">Level 2: Happy 😄</div>
+        <div class="progress-step" id="step-3">Level 3: Sad 😢</div>
+        <div class="progress-step" id="step-4">Level 4: Surprised 😲</div>
+    </div>
+
+    <!-- Stage 1: Story Presentation -->
+    <div id="story-stage">
+        <div class="story-card">
+            <img id="comic-display" src="" alt="Social Scenario Comic" class="comic-img">
+            <div class="story-text" id="story-title">Level 1 Scenario</div>
+            <div class="story-question" id="story-question">Question placeholder</div>
+        </div>
+        <div class="action-bar">
+            <button class="btn-sub" onclick="openGuideModal()">💡 Facial Clues Guide</button>
+            <button class="btn-main" onclick="startChallenge()">Start AI Imitation Challenge 🚀</button>
+            <button class="btn-skip" onclick="skipLevel()">⏭️ Skip Level</button>
+        </div>
+    </div>
+
+    <!-- Stage 2: Camera & Emotion Recognition -->
+    <div id="interactive-stage">
+        <p style="font-size: 18px; color: #0c2461; font-weight: bold; margin: 5px 0;" id="camera-prompt">
+            Imitate the target emotion in front of the camera!
+        </p>
+        <div class="action-bar" style="margin-top: 5px;">
+            <button class="btn-sub" onclick="openGuideModal()">💡 Facial Clues</button>
+            <button class="btn-skip" onclick="skipLevel()">⏭️ Skip / Complete</button>
+        </div>
+        <div id="canvas-container">
+            <div id="countdown-overlay">3</div>
+            <div id="hold-overlay">
+                <div class="hold-title">Great job! Hold expression for:</div>
+                <div class="hold-timer-text"><span id="hold-timer">3</span>s</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Learning Guide Modal -->
+    <div class="modal" id="guide-modal">
+        <div class="modal-content">
+            <h2 style="color: #4a69bd; margin-top: 0;">💡 Super NoNo's Expression Guide</h2>
+            <div class="guide-box" id="guide-text">
+                Facial expression breakdown will be shown here.
+            </div>
+            <button class="btn-main" onclick="closeGuideModal()">Got It! Let's Try!</button>
+        </div>
+    </div>
+
+    <!-- Victory Modal (Single Level) -->
+    <div class="modal" id="victory-modal">
+        <div class="modal-content">
+            <div class="stamp-badge">💮</div>
+            <h2 style="color: #e55039; margin: 0;" id="victory-title">🎉 Level Cleared!</h2>
+            
+            <div class="social-tip-box">
+                <div class="social-tip-title">💡 Social Tip for Classroom</div>
+                <div class="social-tip-body" id="victory-tip-body">
+                    Social tips placeholder.
+                </div>
+            </div>
+
+            <button class="btn-main" onclick="nextLevel()" id="next-btn" disabled>Next Level in 2s...</button>
+        </div>
+    </div>
+
+    <!-- Quiz Modal (Quiz 1 & Quiz 2 & Grand Trophy Report) -->
+    <div class="modal" id="quiz-modal">
+        <div class="modal-content">
+            <div id="quiz-header-icon" class="stamp-badge" style="display:none;">🏆</div>
+            <h2 style="color: #1e3799; margin: 0;" id="quiz-title">📝 Social Understanding Quiz 1</h2>
+            <img id="quiz-img" src="" alt="Quiz Scenario" class="quiz-display-img" style="margin: 12px 0;">
+            <div style="font-size: 16px; font-weight: bold; color: #2c3e50; margin-bottom: 12px;" id="quiz-question-text">
+                Question Text...
+            </div>
+            
+            <div id="quiz-options-container">
+                <!-- Options populated dynamically -->
+            </div>
+
+            <div id="quiz-feedback" style="margin-top: 10px; font-weight: bold; font-size: 15px; min-height: 20px;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Endpoint for ML Model
+    let imageModelURL = 'https://teachablemachine.withgoogle.com/models/aUqxZrEgp/'; 
+
+    // Global Assessment Data Collector
+    let assessmentData = {
+        studentId: "Student_001",
+        startTime: "",
+        levelTimings: {}, // { "Angry": "4.2s", ... }
+        quizAnswers: {}   // { "Quiz 1": "Correct (1st try)" }
+    };
+
+    let levelStartTime = 0;
+
+    const levelsData = [
+        {
+            level: 1,
+            targetEmotion: "angry",
+            title: "Level 1: Accidental Bump in the Corridor",
+            question: "💡 Look at panel 4: How does the girl feel after being bumped into? Is she joking or really angry? Imitate her expression!",
+            guide: "<b>Features of 'Angry':</b><br>1. <b>Brows:</b> Frowned and pulled down together.<br>2. <b>Eyes:</b> Staring wide straight ahead.<br>3. <b>Mouth:</b> Tightly pressed or turned down.<br><br><i>Social Tip: When a classmate shows this face, stop playing immediately and say sorry!</i>",
+            tip: "Lowered eyebrows and tight lips mean <b>ANGER</b>. Stop playing immediately and say sorry sincerely to resolve the conflict!",
+            imageSrc: "https://i.ibb.co/0jzZvmZ7/comic1.jpg"
+        },
+        {
+            level: 2,
+            targetEmotion: "happy",
+            title: "Level 2: Helping Each Other with Homework",
+            question: "💡 Look at panel 4: How do the classmates feel after working out the problem together? Imitate their smile!",
+            guide: "<b>Features of 'Happy':</b><br>1. <b>Mouth:</b> Corners of the mouth curved upward.<br>2. <b>Eyes:</b> Relaxed and crinkled at corners.<br>3. <b>Cheeks:</b> Raised cheeks.<br><br><i>Social Tip: Smile back when classmates are friendly to build friendship!</i>",
+            tip: "Responding to friendly smiles with a warm smile helps you make good friends and build strong relationships in class!",
+            imageSrc: "https://i.ibb.co/xtJcY5LL/comic2.jpg"
+        },
+        {
+            level: 3,
+            targetEmotion: "sad",
+            title: "Level 3: Accidentally Ripped Drawing",
+            question: "💡 Look at panel 4: The girl's drawing was torn by accident. How does she feel? Imitate her sad face!",
+            guide: "<b>Features of 'Sad':</b><br>1. <b>Brows:</b> Inner corners raised upward.<br>2. <b>Eyes:</b> Looking down or crying.<br>3. <b>Mouth:</b> Corners turned downward.<br><br><i>Social Tip: Offer a tissue and comfort classmates when they are sad!</i>",
+            tip: "Expressing sympathy ('Are you okay? I can help fix it') and offering comfort helps sad friends feel supported!",
+            imageSrc: "https://i.ibb.co/4Rx9NKM6/comic3.jpg"
+        },
+        {
+            level: 4,
+            targetEmotion: "surprise",
+            title: "Level 4: Sudden Science Experiment Flash",
+            question: "💡 Look at panel 4: A sudden flash happened in the lab! What face did she make? Imitate the surprise!",
+            guide: "<b>Features of 'Surprised':</b><br>1. <b>Brows:</b> Curved and raised high.<br>2. <b>Eyes:</b> Opened very wide.<br>3. <b>Mouth:</b> Opened wide in an 'O' shape.<br><br><i>Social Tip: Stay calm and check if everyone is safe during sudden events!</i>",
+            tip: "Sudden surprises can feel overwhelming. Staying calm and checking if everyone is safe helps keep your peers secure!",
+            imageSrc: "https://i.ibb.co/Q0H2YrV/comic4.jpg"
+        }
+    ];
+
+    const quizzesData = [
+        {
+            id: 1,
+            title: "📝 Social Quiz 1: Playing Sports Together",
+            imageSrc: "https://i.ibb.co/TDytWwTT/08c31db3-f146-457f-9914-70bdb25e9811.jpg",
+            question: "When playing sports together, your friend suddenly falls down and looks hurt. What should you do?",
+            options: [
+                "A. Stop immediately, run over to help them up, and ask if they are okay.",
+                "B. Keep running and laugh at them for falling down.",
+                "C. Ignore them and walk away to play by yourself."
+            ],
+            correct: 0
+        },
+        {
+            id: 2,
+            title: "📝 Social Quiz 2: Watching Friend Drawing",
+            imageSrc: "https://i.ibb.co/cSCTXQ02/f2f6020df7fa9ca6ed5de9c0c020929c.png",
+            question: "When watching your friend draw, you accidentally tear or ruin their artwork. What is the best social response?",
+            options: [
+                "A. Apologize sincerely right away, help clean up, and offer to fix or draw a new one together.",
+                "B. Laugh out loud at the ruined drawing and feel proud of yourself.",
+                "C. Ignore your friend completely and walk away immediately."
+            ],
+            correct: 0
+        }
+    ];
+
+    let currentLevelIdx = 0;
+    let currentQuizIdx = 0;
+    let quizAttempts = 0;
+    let classifier;
+    let video;
+    let currentLabel = "";
+    let confidence = 0;
+    let hasWon = false;
+    let isCountingDown = false;
+    let countdownVal = 3;
+    let angle = 0;
+
+    let holdTimer = null;
+    let holdCount = 3;
+    let isHolding = false;
+    let readLockTimer = null;
+
+    function confirmStudentId() {
+        let val = document.getElementById('student-id-input').value.trim();
+        if (val) assessmentData.studentId = val;
+        assessmentData.startTime = new Date().toLocaleTimeString();
+        document.getElementById('login-modal').style.display = 'none';
+        setupGame();
+    }
+
+    function preload() {
+        classifier = ml5.imageClassifier(imageModelURL + 'model.json');
+    }
+
+    function setupGame() {
+        loadLevel(currentLevelIdx);
+    }
+
+    function loadLevel(idx) {
+        hasWon = false;
+        isCountingDown = false;
+        resetHoldState();
+
+        let data = levelsData[idx];
+
+        for (let i = 0; i < 4; i++) {
+            let el = document.getElementById(`step-${i+1}`);
+            el.className = "progress-step";
+            if (i < idx) el.classList.add("completed");
+            if (i === idx) el.classList.add("active");
+        }
+
+        let comicEl = document.getElementById('comic-display');
+        comicEl.src = data.imageSrc;
+
+        document.getElementById('story-title').innerText = data.title;
+        document.getElementById('story-question').innerText = data.question;
+        document.getElementById('guide-text').innerHTML = data.guide;
+
+        document.getElementById('story-stage').style.display = 'block';
+        document.getElementById('interactive-stage').style.display = 'none';
+        document.getElementById('victory-modal').style.display = 'none';
+        document.getElementById('guide-modal').style.display = 'none';
+        document.getElementById('quiz-modal').style.display = 'none';
+        document.getElementById('countdown-overlay').style.display = 'none';
+        document.getElementById('hold-overlay').style.display = 'none';
+    }
+
+    function startChallenge() {
+        let data = levelsData[currentLevelIdx];
+        document.getElementById('story-stage').style.display = 'none';
+        document.getElementById('interactive-stage').style.display = 'block';
+        document.getElementById('camera-prompt').innerHTML = `Get ready! Show an <b>[${data.targetEmotion.toUpperCase()}]</b> expression!`;
+        
+        runCountdown();
+
+        if (!video) {
+            let canvas = createCanvas(640, 480);
+            canvas.parent('canvas-container');
+
+            video = createCapture(VIDEO, function() {
+                classifyVideo();
+            });
+            video.size(640, 480);
+            video.hide();
+        }
+    }
+
+    function runCountdown() {
+        isCountingDown = true;
+        countdownVal = 3;
+        let overlay = document.getElementById('countdown-overlay');
+        overlay.innerText = countdownVal;
+        overlay.style.display = 'block';
+
+        let timer = setInterval(() => {
+            countdownVal--;
+            if (countdownVal > 0) {
+                overlay.innerText = countdownVal;
+            } else if (countdownVal === 0) {
+                overlay.innerText = "GO!";
+            } else {
+                clearInterval(timer);
+                overlay.style.display = 'none';
+                isCountingDown = false;
+                levelStartTime = millis(); // 记录识别开始时间
+            }
+        }, 1000);
+    }
+
+    function resetHoldState() {
+        if (holdTimer) clearInterval(holdTimer);
+        holdTimer = null;
+        holdCount = 3;
+        isHolding = false;
+        let overlay = document.getElementById('hold-overlay');
+        if (overlay) overlay.style.display = 'none';
+    }
+
+    function startHoldTimer() {
+        if (isHolding) return;
+        isHolding = true;
+        holdCount = 3;
+        
+        let overlay = document.getElementById('hold-overlay');
+        let timerSpan = document.getElementById('hold-timer');
+        overlay.style.display = 'block';
+        timerSpan.innerText = holdCount;
+
+        holdTimer = setInterval(() => {
+            holdCount--;
+            if (holdCount > 0) {
+                timerSpan.innerText = holdCount;
+            } else {
+                clearInterval(holdTimer);
+                triggerVictory();
+            }
+        }, 1000);
+    }
+
+    function openGuideModal() { document.getElementById('guide-modal').style.display = 'flex'; }
+    function closeGuideModal() { document.getElementById('guide-modal').style.display = 'none'; }
+
+    function skipLevel() {
+        resetHoldState();
+        triggerVictory(true);
+    }
+
+    function triggerVictory(isSkipped = false) {
+        if (hasWon) return;
+        hasWon = true;
+        resetHoldState();
+
+        // 记录当前关卡耗时
+        let elapsed = isSkipped ? "Skipped" : ((millis() - levelStartTime)/1000).toFixed(1) + "s";
+        let emotionName = levelsData[currentLevelIdx].targetEmotion;
+        assessmentData.levelTimings[emotionName] = elapsed;
+        
+        let data = levelsData[currentLevelIdx];
+        document.getElementById('victory-title').innerText = `🎉 Level ${data.level} Cleared!`;
+        document.getElementById('victory-tip-body').innerHTML = data.tip;
+
+        let nextBtn = document.getElementById('next-btn');
+        nextBtn.disabled = true;
+
+        let readCountdown = 2;
+        let isFinalLevel = (currentLevelIdx === levelsData.length - 1);
+        let btnText = isFinalLevel ? "📝 Start Social Quiz Check ➡️" : "Next Level ➡️";
+
+        nextBtn.innerText = `Read Tip (${readCountdown}s)...`;
+
+        if (readLockTimer) clearInterval(readLockTimer);
+        readLockTimer = setInterval(() => {
+            readCountdown--;
+            if (readCountdown > 0) {
+                nextBtn.innerText = `Read Tip (${readCountdown}s)...`;
+            } else {
+                clearInterval(readLockTimer);
+                nextBtn.disabled = false;
+                nextBtn.innerText = btnText;
+                nextBtn.onclick = isFinalLevel ? startQuizPhase : nextLevel;
+            }
+        }, 1000);
+
+        setTimeout(() => {
+            document.getElementById('victory-modal').style.display = 'flex';
+        }, 300);
+    }
+
+    function nextLevel() {
+        if (currentLevelIdx < levelsData.length - 1) {
+            currentLevelIdx++;
+            loadLevel(currentLevelIdx);
+        }
+    }
+
+    /* Quiz Phase Functions */
+    function startQuizPhase() {
+        document.getElementById('victory-modal').style.display = 'none';
+        currentQuizIdx = 0;
+        showQuiz(currentQuizIdx);
+    }
+
+    function showQuiz(idx) {
+        quizAttempts = 0;
+        let qData = quizzesData[idx];
+        document.getElementById('quiz-header-icon').style.display = 'none';
+        document.getElementById('quiz-img').style.display = 'block';
+        document.getElementById('quiz-title').innerText = qData.title;
+        document.getElementById('quiz-img').src = qData.imageSrc;
+        document.getElementById('quiz-question-text').innerText = qData.question;
+        document.getElementById('quiz-feedback').innerText = "";
+
+        let optContainer = document.getElementById('quiz-options-container');
+        optContainer.innerHTML = "";
+
+        qData.options.forEach((optText, optIdx) => {
+            let btn = document.createElement('button');
+            btn.className = 'quiz-option-btn';
+            btn.innerText = optText;
+            btn.onclick = () => checkQuizAnswer(optIdx, qData.correct);
+            optContainer.appendChild(btn);
+        });
+
+        document.getElementById('quiz-modal').style.display = 'flex';
+    }
+
+    function checkQuizAnswer(selectedIdx, correctIdx) {
+        quizAttempts++;
+        let feedbackEl = document.getElementById('quiz-feedback');
+        let quizName = `Quiz ${currentQuizIdx + 1}`;
+
+        if (selectedIdx === correctIdx) {
+            feedbackEl.style.color = "#27ae60";
+            feedbackEl.innerText = "🌟 Excellent! That's the correct social response!";
+            
+            assessmentData.quizAnswers[quizName] = (quizAttempts === 1) ? "Passed (1st try)" : `Passed (${quizAttempts} attempts)`;
+
+            setTimeout(() => {
+                currentQuizIdx++;
+                if (currentQuizIdx < quizzesData.length) {
+                    showQuiz(currentQuizIdx);
+                } else {
+                    showFinalCompletion();
+                }
+            }, 1200);
+        } else {
+            feedbackEl.style.color = "#e74c3c";
+            feedbackEl.innerText = "❌ Not quite! Think about how your friend feels and try again.";
+        }
+    }
+
+    /* Final Trophy Screen (带 Student ID 评估面板与 CSV 下载) */
+    function showFinalCompletion() {
+        document.getElementById('quiz-img').style.display = 'none';
+        document.getElementById('quiz-header-icon').className = 'trophy-badge';
+        document.getElementById('quiz-header-icon').style.display = 'block';
+        
+        document.getElementById('quiz-title').innerText = "🏆 Grand Champion Achievement!";
+        
+        let reportHTML = `
+            <div class="report-card">
+                <div style="font-weight:bold; color:#1e3799; font-size:15px; margin-bottom:8px; border-bottom:2px solid #4a69bd; padding-bottom:4px;">
+                    📊 Assessment Log for Student: <span style="color:#e55039;">${assessmentData.studentId}</span>
+                </div>
+                <div class="report-item"><span>Angry Recognition:</span><b>${assessmentData.levelTimings['angry'] || 'N/A'}</b></div>
+                <div class="report-item"><span>Happy Recognition:</span><b>${assessmentData.levelTimings['happy'] || 'N/A'}</b></div>
+                <div class="report-item"><span>Sad Recognition:</span><b>${assessmentData.levelTimings['sad'] || 'N/A'}</b></div>
+                <div class="report-item"><span>Surprise Recognition:</span><b>${assessmentData.levelTimings['surprise'] || 'N/A'}</b></div>
+                <div class="report-item"><span>Sports Fall Scenario Quiz:</span><b>${assessmentData.quizAnswers['Quiz 1'] || 'N/A'}</b></div>
+                <div class="report-item"><span>Ripped Drawing Scenario Quiz:</span><b>${assessmentData.quizAnswers['Quiz 2'] || 'N/A'}</b></div>
+            </div>
+        `;
+
+        document.getElementById('quiz-question-text').innerHTML = `
+            <b style='color:#e55039; font-size:22px;'>🎉 Congratulations, Student ${assessmentData.studentId}!</b><br>
+            ${reportHTML}
+        `;
+        
+        let optContainer = document.getElementById('quiz-options-container');
+        optContainer.innerHTML = `
+            <button class="btn-main" onclick="downloadCSVReport()" style="width:100%; font-size:16px; margin-bottom:10px; background:#4a69bd;">📥 Download Assessment Log (.csv)</button>
+            <button class="btn-sub" onclick="location.reload()" style="width:100%; font-size:15px;">🔄 Restart New Session</button>
+        `;
+        document.getElementById('quiz-feedback').innerText = "";
+    }
+
+    function downloadCSVReport() {
+        let csvContent = "data:text/csv;charset=utf-8,";
+        csvContent += "Student_ID,Category,Item,Result\n";
+        csvContent += `${assessmentData.studentId},Emotion,Angry,${assessmentData.levelTimings['angry']||'N/A'}\n`;
+        csvContent += `${assessmentData.studentId},Emotion,Happy,${assessmentData.levelTimings['happy']||'N/A'}\n`;
+        csvContent += `${assessmentData.studentId},Emotion,Sad,${assessmentData.levelTimings['sad']||'N/A'}\n`;
+        csvContent += `${assessmentData.studentId},Emotion,Surprise,${assessmentData.levelTimings['surprise']||'N/A'}\n`;
+        csvContent += `${assessmentData.studentId},Quiz,Quiz_1_Sports_Fall,${assessmentData.quizAnswers['Quiz 1']||'N/A'}\n`;
+        csvContent += `${assessmentData.studentId},Quiz,Quiz_2_Ripped_Drawing,${assessmentData.quizAnswers['Quiz 2']||'N/A'}\n`;
+
+        let encodedUri = encodeURI(csvContent);
+        let link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `Assessment_${assessmentData.studentId}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function draw() {
+        background(240);
+        
+        if (video) {
+            push();
+            translate(width, 0);
+            scale(-1, 1);
+            image(video, 0, 0, width, height);
+            pop();
+        }
+
+        drawSuperNono(currentLabel, confidence);
+
+        let data = levelsData[currentLevelIdx];
+        let lbl = currentLabel.toLowerCase();
+        
+        let isMatched = false;
+        if (data.targetEmotion === "angry") {
+            isMatched = lbl.includes("angry") || lbl.includes("生气") || lbl.includes("怒") || lbl.includes("class 1");
+        } else if (data.targetEmotion === "happy") {
+            isMatched = lbl.includes("happy") || lbl.includes("高兴") || lbl.includes("笑") || lbl.includes("class 2");
+        } else if (data.targetEmotion === "sad") {
+            isMatched = lbl.includes("sad") || lbl.includes("难过") || lbl.includes("伤心") || lbl.includes("class 3");
+        } else if (data.targetEmotion === "surprise") {
+            isMatched = lbl.includes("shock") || lbl.includes("surpris") || lbl.includes("惊") || lbl.includes("class 4");
+        }
+
+        if (!isCountingDown && !hasWon) {
+            if (confidence > 0.60 && isMatched) {
+                startHoldTimer();
+            } else {
+                resetHoldState();
+            }
+        }
+    }
+
+    function classifyVideo() {
+        if (!video) return;
+        classifier.classify(video, gotResult);
+    }
+
+    function gotResult(error, results) {
+        if (error) {
+            console.error(error);
+            return;
+        }
+        currentLabel = results[0].label;
+        confidence = results[0].confidence;
+        classifyVideo();
+    }
+
+    function drawSuperNono(label, conf) {
+        push();
+        angle += 0.05;
+        let hoverY = sin(angle) * 5;
+        translate(540, 100 + hoverY);
+
+        noStroke();
+        fill(0, 168, 255, 60);
+        ellipse(0, 0, 110, 110);
+        fill(0, 168, 255, 120);
+        ellipse(0, 0, 95, 95);
+
+        fill(235, 47, 6);
+        triangle(-45, 0, -65, -20, -50, 15);
+        triangle(45, 0, 65, -20, 50, 15);
+
+        fill(235, 47, 6);
+        ellipse(0, 0, 80, 80);
+        fill(245, 246, 250);
+        arc(0, 0, 80, 80, 0, PI);
+
+        fill(24, 44, 97);
+        stroke(0, 216, 214);
+        strokeWeight(3);
+        ellipse(0, -5, 50, 35);
+
+        noStroke();
+        if (isHolding || hasWon) {
+            fill(255, 77, 77);
+            ellipse(-12, -8, 8, 8);
+            ellipse(12, -8, 8, 8);
+            stroke(255, 77, 77);
+            strokeWeight(3);
+            line(-10, 3, 10, 3);
+            
+            stroke(255, 77, 77, 180);
+            strokeWeight(2);
+            line(0, -40, 0, -55);
+            fill(255, 77, 77);
+            noStroke();
+            ellipse(0, -55, 8, 8);
+        } else {
+            fill(0, 216, 214);
+            ellipse(-10, -5, 10, 10);
+            ellipse(10, -5, 10, 10);
+            fill(255);
+            ellipse(-8, -7, 4, 4);
+            ellipse(12, -7, 4, 4);
+            
+            stroke(0, 216, 214);
+            strokeWeight(2);
+            line(0, -40, 0, -52);
+            fill(0, 216, 214);
+            noStroke();
+            ellipse(0, -52, 6, 6);
+        }
+        pop();
+    }
+</script>
+</body>
+</html>
